@@ -14,12 +14,38 @@ In the current version only the metro lines are available for display. Used are:
 >[!Note]
 >The code updated to this repository is not the final version. I will update the code from time to time to resolve any bugs.
 >Known issues:
-> - [ ] certain stations (terminal stations) may require a diffrent amount of monitors then present, get_departures_platform_mode() has to be updated to account for that 
-> - [ ] implement method for changing side of "platform number"
-> - [ ] implement alternative display-modes to toggle showing only "platform number", only "line", or both
-> - [ ] in __print_countdown, the start position should be shifted 3-4px to the right, if the countdown is between 0 and 9
+> - [x] certain stations (terminal stations) may require a diffrent amount of monitors then present, get_departures_platform_mode() has to be updated to account for that 
+> - [x] implement method for changing side of "platform number"
+> - [x] implement alternative display-modes to toggle showing only "platform number", only "line", or both
+> - [x] in __print_countdown, the start position should be shifted 3-4px to the right, if the countdown is between 0 and 9
 > - [ ] a better casting method for the terminal stations of the trains is needed
 
+## Quickstart
+Additionally to 3 files in 'micropython_ssd1322', the packages 'urequests' and 'datetime' need to be installed.
+
+The file structure on your board should contain the following:
+```bash
+├── micropython_ssd1322
+│   ├── ssd1322.py
+│   ├── xgcl_font.py
+│   └── mono_palette.py
+├── lib
+│   └── requests
+│   │   ├── __init__.mpy
+│   ├── datetime.mpy
+│   └── urequests.mpy
+├── fonts
+│   └── default_font.c
+├── img
+│   ├── Gleis1.mono
+│   ├── Gleis2.mono
+│   └── Gleis3.mono
+├── boot.py
+├── Program.py
+├── DataConversion.py
+└── Monitors.py
+```
+On booting the board, boot.py will execute the program.
 ## Electronic description
 ### Pinout Display
 
@@ -41,6 +67,8 @@ To interact with the monitor, I use a DIP-switch with 10 pins to encode:
 |Pin|1-3|4-8|9|10|
 |-|-|-|-|-|
 ||line|station|advanced preview| displaymode|
+
+For more details see 'input-codes.pdf'.
 
 
 ## About this project:

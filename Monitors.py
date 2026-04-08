@@ -130,7 +130,8 @@ class Monitor:
             if (is_second_line):#breaks after second line
                 break
             is_second_line = True
-        
+
+    def present(self):
         self.Display.present()
 
     def __show_platform(self, platform:int):

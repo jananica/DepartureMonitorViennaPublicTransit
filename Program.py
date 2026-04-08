@@ -226,6 +226,10 @@ class WienerLinienMonitor:
             
             delta_ms = time.ticks_diff(time.ticks_ms(),ticks1)
             time.sleep_ms(UPDATE_PERIOD*1000//number_of_monitors-delta_ms)
+
+        for i in range(number_of_monitors):
+            self.Monitors[i].present()
+        
             
     def cleanup(self):
         '''Cleans up the monitors and the spi connection.'''

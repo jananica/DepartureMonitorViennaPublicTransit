@@ -55,7 +55,7 @@ class Monitor:
         '''**returns:** starting x-position of elements to be displayed
         '''
         Platform_Left = {'platform':0, 'separator':35, 'text':40, 'ramp':216, 'countdown':230}
-        Platform_Right = {'text':4, 'ramp':180, 'countdown':194, 'separator':219, 'platform':219}
+        Platform_Right = {'text':4, 'ramp':180, 'countdown':194, 'separator':219, 'platform':220}
         No_Platform = {'text':4, 'ramp':216, 'countdown':230}
 
         Platform_shown = {'LEFT':Platform_Left, 'RIGHT':Platform_Right}
@@ -145,7 +145,7 @@ class Monitor:
 
         if (should_update_platform):
             platform_path = f'img/Gleis{platform}.mono'
-            self.Display.draw_bitmap_mono(platform_path, self.item_x_positions['platform'], 0, 36, 64, invert=True)#TODO: catch no file in directory error
+            self.Display.draw_bitmap_mono(platform_path, self.item_x_positions['platform'], 0, 35, 64, invert=True)#TODO: catch no file in directory error
             self.Display.draw_rectangle(self.item_x_positions['separator'], 0, 1, 64, gs=15)
             self.platform_number_displayed = platform
 

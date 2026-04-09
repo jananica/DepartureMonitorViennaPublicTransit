@@ -9,10 +9,36 @@ from Monitors import Monitor
 import DataConversion
 
 #configuration data - displaying options
-display_mode0 = {'flag_show_platform_nr': True, 'flag_show_line':False} #if 'flag_show_platform_nr' then the Platform number will be shown
-display_mode1 = {'flag_show_platform_nr': False, 'flag_show_line':True} #if 'flag_show_line' then the line will be displayed
-display_modes = [display_mode0,display_mode1]
+#if 'SHOW_PLATFORM_NR' then the Platform number will be shown
+#if 'SHOW_LINE' then the line will be displayed
+#'SHOW_ON_EMPTY' can be either 'NO_BOARDING_DE', 'NO_BOARDING', 'NEXT_DEPARTURE' or 'EMPTY'
+#if 'show_statement' is true, then the text CUSTOM_STATEMENT will be shown in-between departures
+#'PERIOD_ADVANCED_PREVIEW':int if >0 then the second and third departure will be switched every 'PERIOD_ADVANCED_PREVIEW' seconds (advanced preview is enabled)
+# 'CUSTOM_STATEMENT':str, custom statement to be displayed in-between departures, a newline is indicated by ';' - if it is empty, then no custom statement will be shown
+display_mode0 = {'SHOW_PLATFORM_NR': True, 
+                 'SHOW_LINE':True, 
+                 'SHOW_ON_EMPTY': 'NO_BOARDING', 
+                 'CUSTOM_STATEMENT': 'ENDSTATION;FÜR GEWALT!', 
+                 'PERIOD_ADVANCED_PREVIEW': -1} 
+display_mode1 = {'SHOW_PLATFORM_NR': True, 
+                 'SHOW_LINE':False, 
+                 'SHOW_ON_EMPTY': 'NEXT_DEPARTURE', 
+                 'CUSTOM_STATEMENT': '', 
+                 'PERIOD_ADVANCED_PREVIEW': 4} 
+display_mode2 = {'SHOW_PLATFORM_NR': True, 
+                 'SHOW_LINE':True, 
+                 'SHOW_ON_EMPTY': 'NO_BOARDING', 
+                 'CUSTOM_STATEMENT': 'ENDSTATION;FÜR GEWALT!', 
+                 'PERIOD_ADVANCED_PREVIEW': 4} 
+display_mode3 = {'SHOW_PLATFORM_NR': True, 
+                 'SHOW_LINE':False, 
+                 'SHOW_ON_EMPTY': 'NEXT_DEPARTURE', 
+                 'CUSTOM_STATEMENT': '', 
+                 'PERIOD_ADVANCED_PREVIEW': -1} 
+display_modes = [display_mode0,display_mode1,display_mode2,display_mode3]
+
 Platform_Sides = ('LEFT','RIGHT') #Side the platform number should be shown, the i-th component refers to the i-th monitor
+ 
 font_path = 'fonts/default_font.c' #string, path to font
 display_text_spacing = 1 #unit: pixel(s), space between letters
 
@@ -26,8 +52,7 @@ UPDATE_PERIOD = 1 #should be at least 0.5*#(monitors), meassured time for update
 LINES = ['U1','U2','U3','U4','U5','U6']
 Pin_in_selectLine = [5,6,7] #these Pins are used to select the line
 Pin_in_selectStation = [8,9,10,17,18] #these pins are usedd to select the 'station-index', see DataConversion.__get_meassured_ids
-Pin_in_selectAdvancedPreview = 21
-Pin_in_select_displaymode = 44
+Pin_in_select_displaymode = [21,44]
 
 #configuration data - Pins for display connections
 Pin_SCK = 48
@@ -45,8 +70,6 @@ class WienerLinienMonitor:
         ''' - configures GPIO pins and spi connection to monitors
         '''
         #setup GPIO
-        self.p_selAdvPrev = Pin(Pin_in_selectAdvancedPreview,Pin.IN,Pin.PULL_UP)
-
         self.pl_lineSelect = []
         for pin_nr in Pin_in_selectLine:
             self.pl_lineSelect.append(Pin(pin_nr,Pin.IN,Pin.PULL_UP))
@@ -55,7 +78,10 @@ class WienerLinienMonitor:
         for pin_nr in Pin_in_selectStation:
             self.pl_stationSelect.append(Pin(pin_nr,Pin.IN,Pin.PULL_UP))
 
-        self.p_setDisplayMode = Pin(Pin_in_select_displaymode,Pin.IN,Pin.PULL_UP)
+        self.pl_select_displaymode = []
+        for pin_nr in Pin_in_select_displaymode:
+            self.pl_select_displaymode.append(Pin(pin_nr,Pin.IN,Pin.PULL_UP))
+
 
         #init the (on board) RGB LED 
         self.RED_LED = Pin(46,Pin.OUT, value = 0)
@@ -64,7 +90,7 @@ class WienerLinienMonitor:
 
         #init Displays
         monitor_font = XglcdFont(font_path, 10, 16, letter_count=190)
-        self.spi = SPI(1, baudrate=250000, sck=Pin(48), mosi=Pin(38))
+        self.spi = SPI(1, baudrate=500000, sck=Pin(48), mosi=Pin(38))
 
         min_len = min(map(len,[Pins_CS,Pins_DC,Pins_RST,Platform_Sides]))
         self.Monitors:list[Monitor] = []
@@ -73,18 +99,19 @@ class WienerLinienMonitor:
             dc_i = Pins_DC[i]
             rst_i = Pins_RST[i]
             self.Monitors.append(Monitor(cs_i,dc_i,rst_i,self.spi,
+                                         displaymode = self.displaymode,
                                          font = monitor_font,
                                          normal_spacing = display_text_spacing,
-                                         period_advanced_preview = ADVANCED_PREVIEW_ANIMATION_PERIOD,
                                          platform_display_side = Platform_Sides[i]))
-        self.AdvancedPrev = False
+        
         self.displaymode = display_modes[0]
+        self.__monitors_update_display_variables()
 
-        for Mo in self.Monitors:
-            Mo.update_advanced_preview(self.AdvancedPrev)
-            Mo.update_display_variables(show_platform=self.displaymode['flag_show_platform_nr'],
-                                       show_line=self.displaymode['flag_show_line'])
         self.departure_data = None
+
+    def __monitors_update_display_variables(self):
+        for Mo in self.Monitors:
+            Mo.update_display_variables(self.displaymode)
 
     def update_RGB(self,r=None,g=None,b=None):
         ''' sets light value of internal rgb-LED. 
@@ -135,7 +162,7 @@ class WienerLinienMonitor:
                     if not self.__fetch_departure_data(): continue
                 
                 flag_have_valid_departure_data = True
-                self.__update_displays()
+                self.__update_monitors()
 
             if(not flag_have_valid_departure_data):
                 break
@@ -151,33 +178,20 @@ class WienerLinienMonitor:
         
         - Note: all entries are inverted because I used pullup-resistors
         '''
-        new_AdvancedPrev = True if self.p_selAdvPrev.value()==0 else False
-        if(new_AdvancedPrev!=self.AdvancedPrev):
-            self.AdvancedPrev = new_AdvancedPrev
-            self.monitors_update_advanced_preview()
-
         list_lineSelect = [1 - pin_id.value() for pin_id in self.pl_lineSelect]
         self.line_selected = LINES[int(''.join(map(str,list_lineSelect)),2)]
 
         list_stationSelect = [1 - pin_id.value() for pin_id in self.pl_stationSelect]
         self.station_index = int(''.join(map(str,list_stationSelect)),2)
 
-        new_displaymode = display_modes[1 - self.p_setDisplayMode.value()]
+        list_displaymodeSelect = [1 - pin_id.value() for pin_id in self.pl_select_displaymode]
+        new_displaymode = display_modes[int(''.join(map(str,list_displaymodeSelect)),2)]
         if(new_displaymode!=self.displaymode):
             self.displaymode = new_displaymode
-            self.monitors_update_display_variables()
+            self.__monitors_update_display_variables()
 
-        print('input is: advanced Prev:',self.AdvancedPrev ,'line:',self.line_selected, 
+        print('input is: line:',self.line_selected, 
               'station_index: ',self.station_index,'displaymode: ',self.displaymode)
-
-    def monitors_update_display_variables(self):
-        for Mo in self.Monitors:
-            Mo.update_display_variables(show_platform=self.displaymode['flag_show_platform_nr'],
-                                       show_line=self.displaymode['flag_show_line'])
-            
-    def monitors_update_advanced_preview(self):
-        for Mo in self.Monitors:
-            Mo.update_advanced_preview(self.AdvancedPrev)
 
     def __fetch_departure_data(self):
         '''Attempts once to fetch departure data from the API and converts it to an internal format. 
@@ -198,13 +212,13 @@ class WienerLinienMonitor:
         self.ref_time = DataConversion.get_refTime(data)
 
         self.departure_data, self.platforms \
-        = DataConversion.get_departures(data, platform_mode=self.displaymode['flag_show_platform_nr'],
+        = DataConversion.get_departures(data, platform_mode=self.displaymode['SHOW_PLATFORM_NR'],
                                         number_of_monitors=len(self.Monitors))
         
         self.update_RGB(g=0)
         return True
 
-    def __update_displays(self):
+    def __update_monitors(self):
         '''upates each display.
 
         if no departure data exists for a monitor, the monitor displays nothing.
@@ -213,22 +227,37 @@ class WienerLinienMonitor:
         delta_time_fetched = int(time.time()-self.time_last_API_request)
         current_time = self.ref_time + timedelta(seconds=delta_time_fetched)
         
+        
         number_of_monitors = len(self.Monitors)
+        should_update = number_of_monitors*[True]
+        current_departure_data = None
+        current_platform = None
         for i in range(number_of_monitors):
             ticks1 = time.ticks_ms()
 
             Mo = self.Monitors[i]
-            if(len(self.departure_data)<=i): Mo.clear()#no data for this monitor, skip
-            else:
+            #TODO: find better comparing method
+            previous_byte_array = str(Mo.Display.gs4_buf)
+           
+            if(len(self.departure_data)>i): 
                 current_departure_data = self.departure_data[i]
                 current_platform = None if self.platforms==None or len(self.platforms)<=i else self.platforms[i]
                 Mo.show_departures(current_departure_data,current_time,current_platform)
+
+            elif(len(self.departure_data)==i):#first empty monitor should display optional text
+                Mo.show_empty_monitor_info(current_departure_data,current_platform,current_time)
+
+            should_update[i] = str(Mo.Display.gs4_buf) != previous_byte_array
             
             delta_ms = time.ticks_diff(time.ticks_ms(),ticks1)
+            print('time for update of monitor',i,':',delta_ms,'ms')
             time.sleep_ms(UPDATE_PERIOD*1000//number_of_monitors-delta_ms)
 
         for i in range(number_of_monitors):
-            self.Monitors[i].present()
+            if(should_update[i]):
+                self.Monitors[i].present()
+                continue
+            print('Monitor',i,'not updated.')
         
             
     def cleanup(self):
